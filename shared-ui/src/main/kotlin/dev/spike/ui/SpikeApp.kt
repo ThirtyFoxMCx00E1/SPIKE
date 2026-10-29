@@ -33,11 +33,11 @@ private val Scheme = darkColorScheme(
 )
 
 @Composable
-fun SpikeApp(session: SpikeSession, modifier: Modifier = Modifier) {
+fun SpikeApp(session: SpikeSession, modifier: Modifier = Modifier, localRea: Boolean = true) {
     var settingsOpen by remember { mutableStateOf(false) }
     MaterialTheme(colorScheme = Scheme) {
         Surface(modifier.fillMaxSize(), color = Ink) {
-            if (settingsOpen) SettingsPane(session) { settingsOpen = false }
+            if (settingsOpen) SettingsPane(session, localRea) { settingsOpen = false }
             else ChatPane(session) { settingsOpen = true }
         }
     }
@@ -89,7 +89,7 @@ private fun Line(l: UiLine) {
 }
 
 @Composable
-private fun SettingsPane(session: SpikeSession, close: () -> Unit) {
+private fun SettingsPane(session: SpikeSession, localRea: Boolean, close: () -> Unit) {
     var s by remember { mutableStateOf(session.settings.value) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Settings", fontSize = 22.sp, color = Amber)
@@ -99,6 +99,16 @@ private fun SettingsPane(session: SpikeSession, close: () -> Unit) {
         Field("API key (optional)", s.apiKey, secret = true) { s = s.copy(apiKey = it) }
         Field("Workspace folder (blank = app folder)", s.workspace) { s = s.copy(workspace = it) }
         Toggle("Allow shell commands", s.allowShell) { s = s.copy(allowShell = it) }
+        Text("Reverse engineering (REA)", color = Dim)
+        if (localRea) {
+            Toggle("Enable REA tools (needs Node.js 22.23+, 24.22+ or 26.12+)", s.reaEnabled) { s = s.copy(reaEnabled = it) }
+            Field("REA command", s.reaCommand) { s = s.copy(reaCommand = it) }
+            Field("Ghidra install folder (optional)", s.reaGhidraDir) { s = s.copy(reaGhidraDir = it) }
+            Field("JAVA_HOME for Ghidra (optional)", s.reaJavaHome) { s = s.copy(reaJavaHome = it) }
+            Text("Only analyze software you own or are authorized to examine.", color = Dim, fontSize = 12.sp)
+        } else {
+            Text("REA runs in the Windows app. Turn on remote-only below to send prompts to it.", color = Dim, fontSize = 12.sp)
+        }
         Text("HiveMQ bus (watch or drive this agent from another device)", color = Dim)
         Toggle("Enable bus", s.busEnabled) { s = s.copy(busEnabled = it) }
         Field("Broker host", s.busHost) { s = s.copy(busHost = it) }
@@ -107,6 +117,9 @@ private fun SettingsPane(session: SpikeSession, close: () -> Unit) {
         Field("Username", s.busUser) { s = s.copy(busUser = it) }
         Field("Password", s.busPass, secret = true) { s = s.copy(busPass = it) }
         Field("Channel (use something hard to guess)", s.busChannel) { s = s.copy(busChannel = it) }
+        Toggle("Remote-only: send my prompts to another device", s.busRemoteOnly) { s = s.copy(busRemoteOnly = it) }
+        Toggle("Trust prompts from the bus: shell, writes, REA (needs a username)", s.busTrustRemote) { s = s.copy(busTrustRemote = it) }
+        Text("Untrusted bus prompts run read-only. Only trust them on your own broker with a login.", color = Dim, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { session.updateSettings(s); close() }) { Text("Save") }
             TextButton(onClick = close) { Text("Cancel") }

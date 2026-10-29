@@ -17,6 +17,11 @@ data class Settings(
     val allowShell: Boolean = true,
     val shellTimeoutSec: Int = 600,
     val workspace: String = "",             // blank = <app data>/workspace
+    // Reverse engineering through REA (MCP server, desktop only; needs Node.js)
+    val reaEnabled: Boolean = false,
+    val reaCommand: String = "npx -y rea-agents@latest mcp",   // or: node /path/to/rea/scripts/rea.mjs mcp
+    val reaGhidraDir: String = "",                              // GHIDRA_INSTALL_DIR, optional
+    val reaJavaHome: String = "",                               // JAVA_HOME for Ghidra, optional
     // HiveMQ / MQTT bus (off by default so prompts are never published by accident)
     val busEnabled: Boolean = false,
     val busHost: String = "broker.hivemq.com",
@@ -25,6 +30,8 @@ data class Settings(
     val busUser: String = "",
     val busPass: String = "",
     val busChannel: String = "",
+    val busRemoteOnly: Boolean = false,     // phone mode: send prompts to another device and show its output
+    val busTrustRemote: Boolean = false,    // let bus prompts use shell, writes and REA (needs busUser)
 ) {
     fun save(f: File) {
         f.parentFile?.mkdirs()

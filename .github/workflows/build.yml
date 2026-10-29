@@ -29,13 +29,13 @@ jobs:
           "$SDKM" "platforms;android-35" "build-tools;35.0.0" "ndk;${NDK_VERSION}" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.10.2 }
-      - name: Build APKs
-        run: gradle :app-android:assembleDebug :app-android:assembleRelease --no-daemon
+      - name: Build the APK (one universal APK: arm64-v8a, armeabi-v7a, x86_64)
+        run: gradle :app-android:assembleRelease --no-daemon
       - name: Collect
         run: |
           mkdir -p out
-          cp app-android/build/outputs/apk/release/*.apk out/SPIKE-android.apk
-          cp app-android/build/outputs/apk/debug/*.apk out/SPIKE-android-debug.apk
+          cp app-android/build/outputs/apk/release/*.apk out/SPIKE.apk
+          ls -l out
       - uses: actions/upload-artifact@v4
         with: { name: android, path: out/*.apk }
 

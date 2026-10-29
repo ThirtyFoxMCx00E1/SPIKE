@@ -24,6 +24,7 @@ object SpikeHolder {
     @Synchronized
     fun get(c: Context): SpikeSession = session ?: SpikeSession(File(c.filesDir, "spike")).also {
         it.estimate = { t -> runCatching { Native.estimateTokens(t) }.getOrElse { (t.length + 3) / 4 } }
+        it.localRea = false // REA needs Node.js; use remote-only mode to drive it on the desktop app
         session = it
     }
 }
@@ -33,6 +34,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val session = SpikeHolder.get(applicationContext)
-        setContent { SpikeApp(session, Modifier.systemBarsPadding().imePadding()) }
+        setContent { SpikeApp(session, Modifier.systemBarsPadding().imePadding(), localRea = false) }
     }
 }

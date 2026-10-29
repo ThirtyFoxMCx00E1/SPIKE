@@ -13,12 +13,12 @@ interface Tool {
     suspend fun run(args: JsonObject): String
 }
 
-private fun JsonObject.str(k: String) = this[k]?.jsonPrimitive?.contentOrNull ?: error("missing argument '$k'")
+internal fun JsonObject.str(k: String) = this[k]?.jsonPrimitive?.contentOrNull ?: error("missing argument '$k'")
 
-private fun schema(vararg p: Pair<String, String>) =
+internal fun schema(vararg p: Pair<String, String>) =
     """{"type":"object","properties":{${p.joinToString(",") { "\"${it.first}\":{\"type\":\"string\",\"description\":\"${it.second}\"}" }}},"required":[${p.joinToString(",") { "\"${it.first}\"" }}]}"""
 
-private fun tool(name: String, desc: String, vararg p: Pair<String, String>, block: suspend (JsonObject) -> String) =
+internal fun tool(name: String, desc: String, vararg p: Pair<String, String>, block: suspend (JsonObject) -> String) =
     object : Tool {
         override val spec = ToolSpec(name, desc, schema(*p))
         override suspend fun run(args: JsonObject) = block(args)
@@ -34,7 +34,8 @@ private class Workspace(val root: File) {
 
 private val SKIP = setOf(".git", "node_modules", "build", ".gradle", ".cxx")
 
-fun defaultTools(root: File, s: Settings, skills: List<Skill>): List<Tool> {
+/** readOnly = no writes and no shell (used for prompts that arrive over the bus without trust). */
+fun defaultTools(root: File, s: Settings, skills: List<Skill>, readOnly: Boolean = false): List<Tool> {
     root.mkdirs()
     val ws = Workspace(root)
     val http = OkHttpClient()
@@ -48,11 +49,11 @@ fun defaultTools(root: File, s: Settings, skills: List<Skill>): List<Tool> {
         val f = ws.resolve(a.str("path")); require(f.isFile) { "no such file" }
         f.readText().take(60_000)
     }
-    out += tool("write_file", "Create or overwrite a file in the workspace", "path" to "relative path", "content" to "full file content") { a ->
+    if (!readOnly) out += tool("write_file", "Create or overwrite a file in the workspace", "path" to "relative path", "content" to "full file content") { a ->
         val f = ws.resolve(a.str("path")); f.parentFile?.mkdirs()
         f.writeText(a.str("content")); "wrote ${f.length()} bytes to ${a.str("path")}"
     }
-    out += tool("edit_file", "Replace one exact occurrence of old with new in a file", "path" to "relative path", "old" to "exact text to replace", "new" to "replacement") { a ->
+    if (!readOnly) out += tool("edit_file", "Replace one exact occurrence of old with new in a file", "path" to "relative path", "old" to "exact text to replace", "new" to "replacement") { a ->
         val f = ws.resolve(a.str("path")); val t = f.readText(); val old = a.str("old")
         require(old.isNotEmpty()) { "old text is empty" }
         val n = Regex(Regex.escape(old)).findAll(t).count()
@@ -68,7 +69,7 @@ fun defaultTools(root: File, s: Settings, skills: List<Skill>): List<Tool> {
             }
         hits.joinToString("\n").ifBlank { "no matches" }
     }
-    if (s.allowShell) out += tool("run_shell", "Run a shell command in the workspace and return its output", "command" to "command line") { a ->
+    if (s.allowShell && !readOnly) out += tool("run_shell", "Run a shell command in the workspace and return its output", "command" to "command line") { a ->
         val win = System.getProperty("os.name").lowercase().contains("win")
         val cmd = if (win) listOf("cmd", "/c", a.str("command")) else listOf("sh", "-c", a.str("command"))
         val p = ProcessBuilder(cmd).directory(root).redirectErrorStream(true).start()

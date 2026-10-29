@@ -13,7 +13,7 @@ import java.io.File
 fun main() = application {
     val session = remember { SpikeSession(File(System.getProperty("user.home"), ".spike")) }
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = { session.close(); exitApplication() },
         title = "SPIKE - $SPK_NAME",
         state = rememberWindowState(width = 1000.dp, height = 720.dp),
     ) { SpikeApp(session) }

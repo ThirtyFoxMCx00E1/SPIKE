@@ -7,15 +7,17 @@ import kotlinx.coroutines.future.await
 import java.util.UUID
 
 /**
- * HiveMQ / MQTT 5 bus. Topics: spike/<channel>/events (agent output), spike/<channel>/cmd (send a prompt).
- * Lets the Windows app watch or drive the agent running on your phone, and the reverse.
+ * HiveMQ / MQTT 5 bus. Topics: spike/<channel>/events (agent output), spike/<channel>/cmd (a prompt to run).
+ * Agent device: subscribes to cmd, publishes events. Remote-only device (phone): publishes cmd, subscribes to events.
  * Use your own HiveMQ broker (see ThirtyFoxMCx00E1/HiveMQ) with a login for anything private.
  */
 class SpikeBus {
     private var client: Mqtt5AsyncClient? = null
     private var channel = ""
 
-    suspend fun apply(s: Settings, onCommand: (String) -> Unit) {
+    val isConnected: Boolean get() = client?.state?.isConnected == true
+
+    suspend fun apply(s: Settings, onCommand: (String) -> Unit, onEvent: (String) -> Unit) {
         client?.disconnect(); client = null
         if (!s.busEnabled) return
         require(s.busChannel.isNotBlank()) { "set a bus channel first" }
@@ -27,8 +29,13 @@ class SpikeBus {
         val connect = if (s.busUser.isBlank()) c.connectWith().send()
         else c.connectWith().simpleAuth().username(s.busUser).password(s.busPass.toByteArray()).applySimpleAuth().send()
         connect.await()
-        c.subscribeWith().topicFilter("spike/${s.busChannel}/cmd").qos(MqttQos.AT_LEAST_ONCE)
-            .callback { p -> onCommand(String(p.payloadAsBytes)) }.send().await()
+        if (s.busRemoteOnly) {
+            c.subscribeWith().topicFilter("spike/${s.busChannel}/events").qos(MqttQos.AT_LEAST_ONCE)
+                .callback { p -> onEvent(String(p.payloadAsBytes)) }.send().await()
+        } else {
+            c.subscribeWith().topicFilter("spike/${s.busChannel}/cmd").qos(MqttQos.AT_LEAST_ONCE)
+                .callback { p -> onCommand(String(p.payloadAsBytes)) }.send().await()
+        }
         channel = s.busChannel
         client = c
     }
