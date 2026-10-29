@@ -1,0 +1,73 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NDK_VERSION: 30.0.16248370   # Android NDK r30
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK, NDK r30, CMake
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;${NDK_VERSION}" "cmake;3.22.1"
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.10.2 }
+      - name: Build APKs
+        run: gradle :app-android:assembleDebug :app-android:assembleRelease --no-daemon
+      - name: Collect
+        run: |
+          mkdir -p out
+          cp app-android/build/outputs/apk/release/*.apk out/SPIKE-android.apk
+          cp app-android/build/outputs/apk/debug/*.apk out/SPIKE-android-debug.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: out/*.apk }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: 8.10.2 }
+      - name: Portable app (no installer needed)
+        run: gradle :app-desktop:createDistributable --no-daemon
+      - name: Zip portable app
+        shell: pwsh
+        run: Compress-Archive -Path app-desktop/build/compose/binaries/main/app/SPIKE -DestinationPath SPIKE-windows-portable.zip
+      - name: MSI installer
+        run: gradle :app-desktop:packageMsi --no-daemon
+        continue-on-error: true
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item SPIKE-windows-portable.zip out/
+          Get-ChildItem app-desktop/build/compose/binaries/main/msi/*.msi -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName out/SPIKE-windows.msi }
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: out/* }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
